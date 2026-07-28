@@ -1,0 +1,27 @@
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500&family=Alex+Brush&family=Great+Vibes&family=Pinyon+Script&family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-serif: "Cormorant Garamond", Georgia, serif;
+  --font-display: "Cinzel", serif;
+  --font-script: "Alex Brush", "Great Vibes", "Pinyon Script", cursive;
+  --font-sans: "Inter", sans-serif;
+  
+  --color-editorial-cream: #0D2C1E;
+  --color-editorial-charcoal: #FFFFFF;
+  --color-editorial-taupe: #FF4B55;
+  --color-editorial-sand: #13442D;
+  --color-editorial-linen: #CEB381;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-editorial-cream);
+  color: var(--color-editorial-charcoal);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Custom scratch card variables & style helper */
+.scratch-container {
+  touch-action: none;
+}

@@ -1,0 +1,65 @@
+[
+  {
+    "id": "gl1",
+    "nome": "Gianluca",
+    "cognome": "Rossi",
+    "cell": "+39 333 1122334",
+    "email": "gianluca.rossi@example.com"
+  },
+  {
+    "id": "gl2",
+    "nome": "Elena",
+    "cognome": "Bianchi",
+    "cell": "+39 347 5566778",
+    "email": "elena.bianchi@example.com"
+  },
+  {
+    "id": "gl3",
+    "nome": "Zio",
+    "cognome": "Giovanni",
+    "cell": "+39 312 9988776",
+    "email": "giovanni.zio@example.com"
+  },
+  {
+    "id": "gl4",
+    "nome": "Giulia",
+    "cognome": "Bianchi",
+    "cell": "+39 339 4455667",
+    "email": "giulia.bianchi@example.com"
+  },
+  {
+    "id": "gl5",
+    "nome": "Alessandro",
+    "cognome": "De Angelis",
+    "cell": "+39 328 1112223",
+    "email": "alessandro.deangelis@example.com"
+  },
+  {
+    "id": "gl6",
+    "nome": "Laura",
+    "cognome": "De Angelis",
+    "cell": "+39 328 4445556",
+    "email": "laura.deangelis@example.com"
+  },
+  {
+    "id": "gl7",
+    "nome": "Francesco",
+    "cognome": "De Angelis",
+    "cell": "+39 328 7778889",
+    "email": "francesco.deangelis@example.com"
+  },
+  {
+    "id": "gl8",
+    "nome": "Marco",
+    "cognome": "Ferrari",
+    "cell": "+39 345 8899001",
+    "email": "marco.ferrari@example.com"
+  },
+  {
+    "id": "gl9",
+    "nome": "Sofia",
+    "cognome": "Ricci",
+    "cell": "+39 331 2233445",
+    "email": "sofia.ricci@example.com"
+  }
+]

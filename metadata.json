@@ -1,0 +1,6 @@
+{
+  "name": "Invito Nozze Interattivo",
+  "description": "Un invito di nozze digitale interattivo con gamification, scratch e reveal della data, countdown e gestione RSVP.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

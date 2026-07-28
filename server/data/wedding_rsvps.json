@@ -1,0 +1,75 @@
+[
+  {
+    "id": "g1",
+    "name": "Gianluca & Elena",
+    "attending": "yes",
+    "menuPreference": "Standard",
+    "dietaryRequirements": "Elena ha un'allergia severa alle nocciole",
+    "companions": [
+      {
+        "id": "c1",
+        "name": "Piccolo Mattia",
+        "menuPreference": "Menu Bambini",
+        "dietaryRequirements": "Senza Lattosio"
+      }
+    ],
+    "weddingMessage": "Siamo felicissimi per voi! Ci vediamo a Chiusdino!",
+    "timestamp": "2026-07-28T08:45:24.293Z"
+  },
+  {
+    "id": "g2",
+    "name": "Zio Giovanni",
+    "attending": "yes",
+    "menuPreference": "Celiaco",
+    "dietaryRequirements": "Celiachia rigorosa, no tracce glutine",
+    "companions": [],
+    "weddingMessage": "Un abbraccio grande a tutta la famiglia, non vedo l'ora!",
+    "timestamp": "2026-07-28T07:45:24.293Z"
+  },
+  {
+    "id": "g3",
+    "name": "giulia bianchi",
+    "attending": "yes",
+    "menuPreference": "Standard",
+    "dietaryRequirements": "",
+    "companions": [
+      {
+        "id": "7cz4inh88",
+        "name": "figlio uno",
+        "menuPreference": "Standard",
+        "dietaryRequirements": ""
+      },
+      {
+        "id": "jhcntsr9d",
+        "name": "figlio due",
+        "menuPreference": "Standard",
+        "dietaryRequirements": ""
+      }
+    ],
+    "weddingMessage": "",
+    "timestamp": "2026-07-28T08:54:37.351Z"
+  },
+  {
+    "id": "g4",
+    "name": "Alessandro De Angelis",
+    "attending": "maybe",
+    "menuPreference": "Standard",
+    "dietaryRequirements": "",
+    "companions": [
+      {
+        "id": "c2",
+        "name": "Laura De Angelis",
+        "menuPreference": "Vegetariano",
+        "dietaryRequirements": ""
+      },
+      {
+        "id": "c3",
+        "name": "Francesco De Angelis",
+        "menuPreference": "Vegano",
+        "dietaryRequirements": ""
+      }
+    ],
+    "weddingMessage": "Stiamo allineando ferie e voli da Londra, faremo di tutto per festeggiare insieme a voi!",
+    "timestamp": "2026-07-28T05:45:24.293Z"
+  }
+]

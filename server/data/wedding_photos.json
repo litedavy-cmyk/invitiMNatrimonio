@@ -1,0 +1,16 @@
+[
+  {
+    "id": "p1",
+    "url": "https://images.unsplash.com/photo-1519741497674-611481863552?w=600&auto=format&fit=crop",
+    "uploader": "Testimone Marco",
+    "caption": "La splendida atmosfera dell'Abbazia di San Galgano! Un posto magico per iniziare questo viaggio.",
+    "timestamp": "2026-07-28T06:45:24.293Z"
+  },
+  {
+    "id": "p2",
+    "url": "https://images.unsplash.com/photo-1511795409834-ef04bbd61622?w=600&auto=format&fit=crop",
+    "uploader": "Chiara Spose",
+    "caption": "I tavoli imbanditi e i profumi toscani a Villa Catignano! Pronte per i balli!",
+    "timestamp": "2026-07-28T07:45:24.293Z"
+  }
+]
