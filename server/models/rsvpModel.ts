@@ -3,12 +3,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import fs from 'fs/promises';
-import path from 'path';
 import { RSVPGuest } from '../../src/types';
+import { readDataFile, writeDataFile } from '../utils/dataStorage';
 
-const DATA_DIR = path.join(process.cwd(), 'server', 'data');
-const FILE_PATH = path.join(DATA_DIR, 'wedding_rsvps.json');
+const FILE_NAME = 'wedding_rsvps.json';
 
 const SAMPLE_GUESTS: RSVPGuest[] = [
   {
@@ -60,23 +58,16 @@ const SAMPLE_GUESTS: RSVPGuest[] = [
 
 export class RsvpModel {
   static async ensureInitialized(): Promise<void> {
-    try {
-      await fs.mkdir(DATA_DIR, { recursive: true });
-      try {
-        await fs.access(FILE_PATH);
-      } catch {
-        await fs.writeFile(FILE_PATH, JSON.stringify(SAMPLE_GUESTS, null, 2), 'utf-8');
-        console.log('✅ RSVPs database seeded successfully.');
-      }
-    } catch (err) {
-      console.error('❌ Error initializing RSVPs data directory:', err);
+    const raw = await readDataFile(FILE_NAME, '');
+    if (!raw) {
+      await writeDataFile(FILE_NAME, JSON.stringify(SAMPLE_GUESTS, null, 2));
     }
   }
 
   static async getAll(): Promise<RSVPGuest[]> {
-    await this.ensureInitialized();
     try {
-      const data = await fs.readFile(FILE_PATH, 'utf-8');
+      const data = await readDataFile(FILE_NAME, '');
+      if (!data) return SAMPLE_GUESTS;
       return JSON.parse(data) as RSVPGuest[];
     } catch {
       return SAMPLE_GUESTS;
@@ -84,8 +75,7 @@ export class RsvpModel {
   }
 
   static async saveAll(rsvps: RSVPGuest[]): Promise<RSVPGuest[]> {
-    await this.ensureInitialized();
-    await fs.writeFile(FILE_PATH, JSON.stringify(rsvps, null, 2), 'utf-8');
+    await writeDataFile(FILE_NAME, JSON.stringify(rsvps, null, 2));
     return rsvps;
   }
 

@@ -3,8 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import fs from 'fs/promises';
-import path from 'path';
+import { readDataFile, writeDataFile, appendDataFile } from '../utils/dataStorage';
 
 export interface HistoryEvent {
   id: string;
@@ -14,41 +13,30 @@ export interface HistoryEvent {
   details?: any;
 }
 
-const DATA_DIR = path.join(process.cwd(), 'server', 'data');
-const JSON_FILE_PATH = path.join(DATA_DIR, 'modifications_history.json');
-const TEXT_LOG_PATH = path.join(DATA_DIR, 'modifications_history.log');
+const JSON_FILE_NAME = 'modifications_history.json';
+const TEXT_LOG_NAME = 'modifications_history.log';
 
 export class HistoryModel {
   static async ensureInitialized(): Promise<void> {
-    try {
-      await fs.mkdir(DATA_DIR, { recursive: true });
-      
-      // Ensure JSON file exists
-      try {
-        await fs.access(JSON_FILE_PATH);
-      } catch {
-        await fs.writeFile(JSON_FILE_PATH, JSON.stringify([], null, 2), 'utf-8');
-      }
+    const rawJson = await readDataFile(JSON_FILE_NAME, '');
+    if (!rawJson) {
+      await writeDataFile(JSON_FILE_NAME, JSON.stringify([], null, 2));
+    }
 
-      // Ensure Text Log file exists
-      try {
-        await fs.access(TEXT_LOG_PATH);
-      } catch {
-        const initialHeader = `===================================================================\n` +
-                              `📜 MATRIMONIO ALESSANDRO & BEATRICE - REGISTRO CRONOLOGICO MODIFICHE\n` +
-                              `===================================================================\n` +
-                              `Creato il: ${new Date().toLocaleString('it-IT')}\n\n`;
-        await fs.writeFile(TEXT_LOG_PATH, initialHeader, 'utf-8');
-      }
-    } catch (err) {
-      console.error('❌ Error initializing modification history repository:', err);
+    const rawText = await readDataFile(TEXT_LOG_NAME, '');
+    if (!rawText) {
+      const initialHeader = `===================================================================\n` +
+                            `📜 MATRIMONIO ALESSANDRO & BEATRICE - REGISTRO CRONOLOGICO MODIFICHE\n` +
+                            `===================================================================\n` +
+                            `Creato il: ${new Date().toLocaleString('it-IT')}\n\n`;
+      await writeDataFile(TEXT_LOG_NAME, initialHeader);
     }
   }
 
   static async getHistory(): Promise<HistoryEvent[]> {
-    await this.ensureInitialized();
     try {
-      const data = await fs.readFile(JSON_FILE_PATH, 'utf-8');
+      const data = await readDataFile(JSON_FILE_NAME, '');
+      if (!data) return [];
       return JSON.parse(data) as HistoryEvent[];
     } catch {
       return [];
@@ -60,7 +48,6 @@ export class HistoryModel {
     description: string,
     details?: any
   ): Promise<HistoryEvent> {
-    await this.ensureInitialized();
     const timestamp = new Date().toISOString();
     const formattedDate = new Date().toLocaleString('it-IT');
     const id = Math.random().toString(36).substring(2, 11);
@@ -77,11 +64,11 @@ export class HistoryModel {
       // 1. Append to structured JSON
       const history = await this.getHistory();
       history.unshift(event); // Newest events first
-      await fs.writeFile(JSON_FILE_PATH, JSON.stringify(history, null, 2), 'utf-8');
+      await writeDataFile(JSON_FILE_NAME, JSON.stringify(history, null, 2));
 
       // 2. Append to plain text log file (.log)
       const textLine = `[${formattedDate}] [${type}] ${description}\n${details ? `   Dettagli: ${JSON.stringify(details)}\n` : ''}\n`;
-      await fs.appendFile(TEXT_LOG_PATH, textLine, 'utf-8');
+      await appendDataFile(TEXT_LOG_NAME, textLine);
 
       console.log(`📝 Logged audit event [${type}]: ${description}`);
     } catch (err) {
@@ -92,11 +79,10 @@ export class HistoryModel {
   }
 
   static async clearHistory(): Promise<void> {
-    await this.ensureInitialized();
-    await fs.writeFile(JSON_FILE_PATH, JSON.stringify([], null, 2), 'utf-8');
+    await writeDataFile(JSON_FILE_NAME, JSON.stringify([], null, 2));
     const resetHeader = `===================================================================\n` +
                         `📜 LOG RESET - Registro ricreato il: ${new Date().toLocaleString('it-IT')}\n` +
                         `===================================================================\n\n`;
-    await fs.writeFile(TEXT_LOG_PATH, resetHeader, 'utf-8');
+    await writeDataFile(TEXT_LOG_NAME, resetHeader);
   }
 }

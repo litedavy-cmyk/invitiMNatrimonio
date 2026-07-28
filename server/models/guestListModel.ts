@@ -3,13 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import fs from 'fs/promises';
-import path from 'path';
 import { GuestListEntry } from '../../src/types';
+import { readDataFile, writeDataFile, removeDataFile } from '../utils/dataStorage';
 
-const DATA_DIR = path.join(process.cwd(), 'server', 'data');
-const FILE_PATH = path.join(DATA_DIR, 'wedding_guest_list.json');
-const METADATA_PATH = path.join(DATA_DIR, 'wedding_guest_list_metadata.json');
+const FILE_NAME = 'wedding_guest_list.json';
+const METADATA_NAME = 'wedding_guest_list_metadata.json';
 
 // Default guest list to ensure it's NEVER null or empty
 const DEFAULT_GUEST_LIST: GuestListEntry[] = [
@@ -26,24 +24,16 @@ const DEFAULT_GUEST_LIST: GuestListEntry[] = [
 
 export class GuestListModel {
   static async ensureInitialized(): Promise<void> {
-    try {
-      await fs.mkdir(DATA_DIR, { recursive: true });
-      try {
-        await fs.access(FILE_PATH);
-      } catch {
-        // If file doesn't exist, seed with default guest list
-        await fs.writeFile(FILE_PATH, JSON.stringify(DEFAULT_GUEST_LIST, null, 2), 'utf-8');
-        console.log('✅ Guest list seeded successfully with default list.');
-      }
-    } catch (err) {
-      console.error('❌ Error initializing guest list data directory:', err);
+    const raw = await readDataFile(FILE_NAME, '');
+    if (!raw) {
+      await writeDataFile(FILE_NAME, JSON.stringify(DEFAULT_GUEST_LIST, null, 2));
     }
   }
 
   static async getAll(): Promise<GuestListEntry[]> {
-    await this.ensureInitialized();
     try {
-      const data = await fs.readFile(FILE_PATH, 'utf-8');
+      const data = await readDataFile(FILE_NAME, '');
+      if (!data) return DEFAULT_GUEST_LIST;
       const list = JSON.parse(data) as GuestListEntry[];
       if (!list || list.length === 0) {
         return DEFAULT_GUEST_LIST;
@@ -58,14 +48,14 @@ export class GuestListModel {
     if (!guests || guests.length === 0) {
       throw new Error('La lista degli invitati non può essere vuota o nulla.');
     }
-    await this.ensureInitialized();
-    await fs.writeFile(FILE_PATH, JSON.stringify(guests, null, 2), 'utf-8');
+    await writeDataFile(FILE_NAME, JSON.stringify(guests, null, 2));
     return guests;
   }
 
   static async getLastFilename(): Promise<string> {
     try {
-      const data = await fs.readFile(METADATA_PATH, 'utf-8');
+      const data = await readDataFile(METADATA_NAME, '');
+      if (!data) return '';
       const obj = JSON.parse(data);
       return obj.lastFilename || '';
     } catch {
@@ -74,19 +64,11 @@ export class GuestListModel {
   }
 
   static async saveLastFilename(filename: string): Promise<void> {
-    await this.ensureInitialized();
-    await fs.writeFile(METADATA_PATH, JSON.stringify({ lastFilename: filename }, null, 2), 'utf-8');
+    await writeDataFile(METADATA_NAME, JSON.stringify({ lastFilename: filename }, null, 2));
   }
 
   static async clearList(): Promise<void> {
-    await this.ensureInitialized();
-    // Overwrite with default list to satisfy "la lista non può essere nulla" or empty Array?
-    // Let's seed back defaults when we reset, or let's reset to default list.
-    await fs.writeFile(FILE_PATH, JSON.stringify(DEFAULT_GUEST_LIST, null, 2), 'utf-8');
-    try {
-      await fs.unlink(METADATA_PATH);
-    } catch {
-      // ignore
-    }
+    await writeDataFile(FILE_NAME, JSON.stringify(DEFAULT_GUEST_LIST, null, 2));
+    await removeDataFile(METADATA_NAME);
   }
 }

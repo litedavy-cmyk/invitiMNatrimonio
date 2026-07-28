@@ -3,19 +3,17 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import fs from 'fs/promises';
-import path from 'path';
 import { WeddingConfig } from '../../src/types';
+import { readDataFile, writeDataFile } from '../utils/dataStorage';
 
-const DATA_DIR = path.join(process.cwd(), 'server', 'data');
-const FILE_PATH = path.join(DATA_DIR, 'wedding_config.json');
+const FILE_NAME = 'wedding_config.json';
 
 const DEFAULT_CONFIG: WeddingConfig = {
   sposoName: 'Alessandro',
   sposaName: 'Beatrice',
   weddingDate: '2026-09-12T15:30:00.000Z',
   welcomeMessage: 'Con grandissima gioia ed emozioni indescrivibili, vi invitiamo a condividere con noi il giorno più importante della nostra vita.',
-  ourStory: 'Ci siamo incontrati per caso in una sera d\'autunno e, da quel momento, non abbiamo mai smesso di camminare fianco a fianco. Dopo anni colmi d\'amore, risate e viaggi indimenticabili, abbiamo deciso di pronunciare il nostro "Sì" definitivo e dare inizio a questa meravigliosa avventura nuziale.',
+  ourStory: 'Ci siamo incontrati per caso in una sera d\'autunno e, da quel momento, non abbiamo mai smetto di camminare fianco a fianco. Dopo anni colmi d\'amore, risate e viaggi indimenticabili, abbiamo deciso di pronunciare il nostro "Sì" definitivo e dare inizio a questa meravigliosa avventura nuziale.',
   venueCeremony: {
     name: 'Abbazia di San Galgano',
     address: 'Strada Comunale di San Galgano, 53012 Chiusdino SI, Italia',
@@ -36,24 +34,16 @@ const DEFAULT_CONFIG: WeddingConfig = {
 
 export class ConfigModel {
   static async ensureInitialized(): Promise<void> {
-    try {
-      await fs.mkdir(DATA_DIR, { recursive: true });
-      try {
-        await fs.access(FILE_PATH);
-      } catch {
-        // File does not exist, write default config
-        await fs.writeFile(FILE_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2), 'utf-8');
-        console.log('✅ Wedding config database seeded successfully.');
-      }
-    } catch (err) {
-      console.error('❌ Error initializing config data directory:', err);
+    const raw = await readDataFile(FILE_NAME, '');
+    if (!raw) {
+      await writeDataFile(FILE_NAME, JSON.stringify(DEFAULT_CONFIG, null, 2));
     }
   }
 
   static async get(): Promise<WeddingConfig> {
-    await this.ensureInitialized();
     try {
-      const data = await fs.readFile(FILE_PATH, 'utf-8');
+      const data = await readDataFile(FILE_NAME, '');
+      if (!data) return DEFAULT_CONFIG;
       return JSON.parse(data) as WeddingConfig;
     } catch {
       return DEFAULT_CONFIG;
@@ -61,8 +51,7 @@ export class ConfigModel {
   }
 
   static async update(newConfig: WeddingConfig): Promise<WeddingConfig> {
-    await this.ensureInitialized();
-    await fs.writeFile(FILE_PATH, JSON.stringify(newConfig, null, 2), 'utf-8');
+    await writeDataFile(FILE_NAME, JSON.stringify(newConfig, null, 2));
     return newConfig;
   }
 }
