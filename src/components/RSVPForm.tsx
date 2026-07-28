@@ -4,15 +4,16 @@
  */
 
 import React, { useState } from 'react';
-import { MailCheck, Users, MessageSquare, Plus, Trash2, HelpCircle } from 'lucide-react';
+import { MailCheck, Users, MessageSquare, Plus, Trash2, HelpCircle, AlertTriangle, X } from 'lucide-react';
 import { RSVPGuest, Companion } from '../types';
 
 interface RSVPFormProps {
   onRSVPSubmit: (guest: RSVPGuest) => void;
   savedGuest?: RSVPGuest;
+  existingRSVPs?: RSVPGuest[];
 }
 
-export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
+export default function RSVPForm({ onRSVPSubmit, savedGuest, existingRSVPs }: RSVPFormProps) {
   const [firstName, setFirstName] = useState(savedGuest?.firstName || (savedGuest?.name ? savedGuest.name.split(' ')[0] : ''));
   const [lastName, setLastName] = useState(savedGuest?.lastName || (savedGuest?.name ? savedGuest.name.split(' ').slice(1).join(' ') : ''));
   const [attending, setAttending] = useState<'yes' | 'no' | 'maybe'>(savedGuest?.attending || 'yes');
@@ -27,6 +28,20 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
   const [submitted, setSubmitted] = useState(false);
   const [isSending, setIsSending] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
+
+  // Overwrite confirmation modal state
+  const [showOverwriteModal, setShowOverwriteModal] = useState(false);
+  const [pendingRSVP, setPendingRSVP] = useState<RSVPGuest | null>(null);
+
+  const normalizeName = (str: string) => {
+    return (str || '')
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  };
 
   const handleAddCompanion = () => {
     const newCompanion: Companion = {
@@ -48,6 +63,66 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
       }
       return c;
     }));
+  };
+
+  const executePostSubmission = async (rsvpToSend: RSVPGuest) => {
+    setIsSending(true);
+    setFeedback(null);
+    setShowOverwriteModal(false);
+
+    try {
+      // Try to save to the server database
+      let res: Response;
+      try {
+        res = await fetch('/api/rsvp', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(rsvpToSend)
+        });
+      } catch (networkErr: any) {
+        // Authentic network failure (offline)
+        console.warn('Real network failure detected during RSVP submit:', networkErr);
+        onRSVPSubmit(rsvpToSend);
+        setSubmitted(true);
+        setFeedback('La risposta è stata registrata e salvata nella memoria del browser, ma si è verificato un errore di rete temporaneo durante l\'invio al server.');
+        return;
+      }
+
+      if (!res.ok) {
+        let errorMsg = '';
+        try {
+          const errData = await res.json();
+          errorMsg = errData.error || errData.details || '';
+        } catch {
+          // ignore parsing error
+        }
+
+        if (!errorMsg) {
+          errorMsg = `Impossibile completare la richiesta. Server ha risposto con codice di stato HTTP ${res.status}.`;
+        }
+        
+        setFeedback(errorMsg);
+        return;
+      }
+
+      // Success
+      setFeedback('Grazie! La tua risposta è stata salvata con successo. Abbiamo aggiornato la lista invitati per gli sposi.');
+      onRSVPSubmit(rsvpToSend);
+      setSubmitted(true);
+
+      setTimeout(() => {
+        setSubmitted(false);
+        setFeedback(null);
+      }, 9000);
+
+    } catch (err: any) {
+      console.error('Unexpected RSVP submission error:', err);
+      setFeedback('Si è verificato un errore imprevisto durante l\'invio dell\'invito. Per favore riprova o contatta gli sposi.');
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -76,61 +151,57 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
       timestamp: new Date().toISOString(),
     };
 
+    // Check if this guest name has ALREADY responded in the RSVP database
     try {
-      // 1. Try to save to the server database
-      let res: Response;
+      let rsvpsList: RSVPGuest[] = existingRSVPs || [];
       try {
-        res = await fetch('/api/rsvp', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify(rsvp)
-        });
-      } catch (networkErr: any) {
-        // This is a authentic network failure (offline, DNS/network down)
-        console.warn('Real network failure detected during RSVP submit:', networkErr);
-        onRSVPSubmit(rsvp);
-        setSubmitted(true);
-        setFeedback('La risposta è stata registrata e salvata nella memoria del browser, ma si è verificato un errore di rete temporaneo durante l\'invio al server.');
-        return;
+        const checkRes = await fetch('/api/rsvp');
+        if (checkRes.ok) {
+          const fresh = await checkRes.json();
+          if (Array.isArray(fresh)) {
+            rsvpsList = fresh;
+          }
+        }
+      } catch {
+        // fallback
       }
 
-      if (!res.ok) {
-        // Parse validation/error information returned by the server
-        let errorMsg = '';
-        try {
-          const errData = await res.json();
-          errorMsg = errData.error || errData.details || '';
-        } catch {
-          // ignore parsing error
-        }
+      const normInputFull = normalizeName(fullName);
+      const normInputFirst = normalizeName(firstName.trim());
+      const normInputLast = normalizeName(lastName.trim());
 
-        if (!errorMsg) {
-          errorMsg = `Impossibile completare la richiesta. Server ha risposto con codice di stato HTTP ${res.status}.`;
+      const alreadyResponded = rsvpsList.find(r => {
+        const rFull = normalizeName(r.name || `${r.firstName || ''} ${r.lastName || ''}`);
+        const rFirst = r.firstName ? normalizeName(r.firstName) : '';
+        const rLast = r.lastName ? normalizeName(r.lastName) : '';
+
+        if (rFull === normInputFull && normInputFull !== '') return true;
+        if (rFirst && rLast && normInputFirst && normInputLast) {
+          if ((rFirst === normInputFirst && rLast === normInputLast) || (rFirst === normInputLast && rLast === normInputFirst)) {
+            return true;
+          }
         }
-        
-        // This is a server-side rejection (e.g. name is not on the Excel guest list). Keep form open!
-        setFeedback(errorMsg);
+        return false;
+      });
+
+      if (alreadyResponded && !savedGuest) {
+        // Name already present in responses! Show warning popup modal
+        setPendingRSVP(rsvp);
+        setShowOverwriteModal(true);
+        setIsSending(false);
         return;
       }
+    } catch (checkErr) {
+      console.warn('Error checking existing RSVPs:', checkErr);
+    }
 
-      // Success
-      setFeedback('Grazie! La tua risposta è stata salvata con successo. Abbiamo aggiornato la lista invitati per gli sposi.');
-      onRSVPSubmit(rsvp);
-      setSubmitted(true);
+    // No existing duplicate found or user editing session: proceed directly
+    await executePostSubmission(rsvp);
+  };
 
-      // Reset success status after some time
-      setTimeout(() => {
-        setSubmitted(false);
-        setFeedback(null);
-      }, 9000);
-
-    } catch (err: any) {
-      console.error('Unexpected RSVP submission error:', err);
-      setFeedback('Si è verificato un errore imprevisto durante l\'invio dell\'invito. Per favore riprova o contatta gli sposi.');
-    } finally {
-      setIsSending(false);
+  const handleConfirmOverwrite = () => {
+    if (pendingRSVP) {
+      executePostSubmission(pendingRSVP);
     }
   };
 
@@ -378,6 +449,64 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
             )}
           </button>
         </form>
+      )}
+
+      {/* OVERWRITE WARNING POPUP MODAL */}
+      {showOverwriteModal && (
+        <div className="fixed inset-0 bg-black/75 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0D2C1E] border-2 border-[#CEB381] p-6 sm:p-8 max-w-md w-full shadow-2xl space-y-5 text-center relative animate-in fade-in zoom-in-95 duration-200">
+            <button
+              type="button"
+              onClick={() => setShowOverwriteModal(false)}
+              className="absolute top-3 right-3 text-[#CEB381] hover:text-white transition-colors cursor-pointer"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div className="w-14 h-14 rounded-full border-2 border-[#FF4B55] flex items-center justify-center mx-auto text-[#FF4B55] bg-[#FF4B55]/10">
+              <AlertTriangle className="w-7 h-7" />
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="font-display text-xl font-bold uppercase tracking-wider text-[#FFFFFF]">
+                Risposta Già Presente!
+              </h3>
+              <p className="font-sans text-xs text-[#CEB381] uppercase tracking-widest font-semibold">
+                {firstName} {lastName}
+              </p>
+            </div>
+
+            <p className="font-serif italic text-sm text-[#FFFFFF]/90 leading-relaxed">
+              Il nome <strong className="text-[#CEB381] font-sans not-italic font-bold">{firstName} {lastName}</strong> è già presente nella lista di chi ha espresso la propria partecipazione.
+            </p>
+
+            <div className="p-3.5 bg-[#13442D] border border-[#CEB381]/50 text-xs font-sans text-[#FFFFFF]/85 text-left space-y-2">
+              <p className="text-[10px] text-[#CEB381] uppercase font-bold tracking-wider">
+                ⚠️ Attenzione:
+              </p>
+              <p className="leading-snug">
+                Se continui, questa nuova risposta <strong>sovrascriverà quella precedente</strong> memorizzata con lo stesso nome.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                type="button"
+                onClick={handleConfirmOverwrite}
+                className="flex-1 py-3 px-4 bg-[#FF4B55] text-[#FFFFFF] font-sans font-bold text-xs uppercase tracking-wider border border-[#FF4B55] hover:bg-rose-600 transition-all cursor-pointer shadow-md"
+              >
+                Sì, Sovrascrivi
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowOverwriteModal(false)}
+                className="flex-1 py-3 px-4 bg-transparent text-[#CEB381] font-sans font-bold text-xs uppercase tracking-wider border border-[#CEB381] hover:bg-[#CEB381]/10 transition-all cursor-pointer"
+              >
+                Annulla
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

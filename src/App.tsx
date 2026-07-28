@@ -423,7 +423,7 @@ export default function App() {
 
             {/* FULL WIDTH IN-FORSE MULTI-COMPANION RSVP FORM */}
             <div id="rsvp-section" className="border-t border-white/10 pt-10">
-              <RSVPForm onRSVPSubmit={handleRSVPSubmit} />
+              <RSVPForm onRSVPSubmit={handleRSVPSubmit} existingRSVPs={rsvps} />
             </div>
 
 
