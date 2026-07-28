@@ -35,8 +35,18 @@ app.use(async (_req, _res, next) => {
   next();
 });
 
-// Route /api, Netlify serverless prefix and root to API routes
-app.use(['/api', '/.netlify/functions/api', '/'], apiRoutes);
+// Middleware to normalize request URL prefix for Netlify serverless routing
+app.use((req, _res, next) => {
+  if (req.url.startsWith('/.netlify/functions/api')) {
+    req.url = req.url.replace('/.netlify/functions/api', '') || '/';
+  } else if (req.url.startsWith('/api')) {
+    req.url = req.url.replace('/api', '') || '/';
+  }
+  next();
+});
+
+// Route normalized API requests to apiRoutes
+app.use('/', apiRoutes);
 
 // Catch 404 for API routes and return JSON
 app.use((_req, res) => {
