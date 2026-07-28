@@ -7,6 +7,7 @@ import { ConfigModel } from '../../server/models/configModel';
 import { RsvpModel } from '../../server/models/rsvpModel';
 import { GuestbookModel } from '../../server/models/guestbookModel';
 import { HistoryModel } from '../../server/models/historyModel';
+import { GuestListModel } from '../../server/models/guestListModel';
 import apiRoutes from '../../server/routes/apiRoutes';
 
 dotenv.config({ path: path.join(process.cwd(), '.env.example'), override: true });
@@ -25,6 +26,7 @@ app.use(async (_req, _res, next) => {
       await RsvpModel.ensureInitialized();
       await GuestbookModel.ensureInitialized();
       await HistoryModel.ensureInitialized();
+      await GuestListModel.ensureInitialized();
       isInit = true;
     } catch (err) {
       console.error('Error initializing databases in Netlify function:', err);
@@ -33,7 +35,18 @@ app.use(async (_req, _res, next) => {
   next();
 });
 
-// Route /api and Netlify serverless prefix to API routes
-app.use(['/api', '/.netlify/functions/api'], apiRoutes);
+// Route /api, Netlify serverless prefix and root to API routes
+app.use(['/api', '/.netlify/functions/api', '/'], apiRoutes);
+
+// Catch 404 for API routes and return JSON
+app.use((_req, res) => {
+  res.status(404).json({ error: 'Endpoint API non trovato su Netlify' });
+});
+
+// Global error handler returning JSON instead of HTML error pages
+app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('Netlify API Error:', err);
+  res.status(500).json({ error: err?.message || 'Errore interno del server serverless.' });
+});
 
 export const handler = serverless(app);

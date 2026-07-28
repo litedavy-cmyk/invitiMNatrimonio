@@ -1,5 +1,29 @@
 [
   {
+    "id": "m9kr4qbe4",
+    "timestamp": "2026-07-28T10:08:44.387Z",
+    "type": "GUEST_LIST_UPLOADED",
+    "description": "Lista Sincronizzata (Stesso file rilevato: \"Lista_invitati_digitale_v4.xlsx\"). Caricati 122 invitati totali. Nessuna variazione rilevata.",
+    "details": {
+      "total": 122,
+      "added": 0,
+      "deleted": 0,
+      "updated": 0,
+      "kept": 122,
+      "fileName": "Lista_invitati_digitale_v4.xlsx",
+      "isOverwritten": false
+    }
+  },
+  {
+    "id": "raqj4m50i",
+    "timestamp": "2026-07-28T10:08:35.018Z",
+    "type": "ADMIN_ACCESS",
+    "description": "Accesso Sposi: Accesso eseguito con successo all'area riservata admin della coppia.",
+    "details": {
+      "ip": "127.0.0.1"
+    }
+  },
+  {
     "id": "qsp9843yb",
     "timestamp": "2026-07-28T10:02:07.239Z",
     "type": "GUEST_LIST_UPLOADED",
