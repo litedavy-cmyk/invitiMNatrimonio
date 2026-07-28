@@ -304,14 +304,31 @@ export function useWeddingData() {
         },
         body: JSON.stringify({ guests: parsedGuests, fileName })
       });
+
+      const contentType = res.headers.get('content-type') || '';
+      const isJson = contentType.includes('application/json');
+
       if (res.ok) {
-        const data = await res.json();
-        setGuestList(data.list);
-        fetchHistoryList();
-        return { success: true, summary: data.summary };
+        if (isJson) {
+          const data = await res.json();
+          setGuestList(data.list);
+          fetchHistoryList();
+          return { success: true, summary: data.summary };
+        } else {
+          throw new Error('Risposta del server non in formato JSON.');
+        }
       } else {
-        const errData = await res.json();
-        throw new Error(errData.error || 'Errore di risposta del server.');
+        let errorMsg = `Errore del server (${res.status})`;
+        if (isJson) {
+          try {
+            const errData = await res.json();
+            errorMsg = errData.error || errorMsg;
+          } catch {}
+        } else {
+          const text = await res.text();
+          errorMsg = `Errore ${res.status}: ${text.slice(0, 120)}`;
+        }
+        throw new Error(errorMsg);
       }
     } catch (err: any) {
       console.error('Failed to upload guest list:', err);
