@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { MailCheck, Users, Wine, MessageSquare, Plus, Trash2, HelpCircle } from 'lucide-react';
+import { MailCheck, Users, MessageSquare, Plus, Trash2, HelpCircle } from 'lucide-react';
 import { RSVPGuest, Companion } from '../types';
 
 interface RSVPFormProps {
@@ -13,14 +13,14 @@ interface RSVPFormProps {
 }
 
 export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
-  const [name, setName] = useState(savedGuest?.name || '');
+  const [firstName, setFirstName] = useState(savedGuest?.firstName || (savedGuest?.name ? savedGuest.name.split(' ')[0] : ''));
+  const [lastName, setLastName] = useState(savedGuest?.lastName || (savedGuest?.name ? savedGuest.name.split(' ').slice(1).join(' ') : ''));
   const [attending, setAttending] = useState<'yes' | 'no' | 'maybe'>(savedGuest?.attending || 'yes');
   
   // Companions local state
   const [companions, setCompanions] = useState<Companion[]>(savedGuest?.companions || []);
   
   // Principal guest food settings
-  const [menuPreference, setMenuPreference] = useState(savedGuest?.menuPreference || 'Standard');
   const [dietaryRequirements, setDietaryRequirements] = useState(savedGuest?.dietaryRequirements || '');
   const [weddingMessage, setWeddingMessage] = useState(savedGuest?.weddingMessage || '');
   
@@ -28,13 +28,10 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
   const [isSending, setIsSending] = useState(false);
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const menuOptions = ['Standard', 'Vegetariano', 'Vegano', 'Celiaco', 'Menu Bambini', 'Senza Lattosio', 'Altro'];
-
   const handleAddCompanion = () => {
     const newCompanion: Companion = {
       id: Math.random().toString(36).substr(2, 9),
       name: '',
-      menuPreference: 'Standard',
       dietaryRequirements: ''
     };
     setCompanions([...companions, newCompanion]);
@@ -55,10 +52,12 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || isSending) return;
+    if (!firstName.trim() || !lastName.trim() || isSending) return;
 
     setIsSending(true);
     setFeedback(null);
+
+    const fullName = `${firstName.trim()} ${lastName.trim()}`;
 
     // Filters out companions with empty names
     const filteredCompanions = attending === 'no' 
@@ -67,9 +66,10 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
 
     const rsvp: RSVPGuest = {
       id: savedGuest?.id || Math.random().toString(36).substr(2, 9),
-      name: name.trim(),
+      firstName: firstName.trim(),
+      lastName: lastName.trim(),
+      name: fullName,
       attending,
-      menuPreference: attending !== 'no' ? menuPreference : 'Standard',
       dietaryRequirements: attending !== 'no' ? dietaryRequirements.trim() : '',
       companions: filteredCompanions,
       weddingMessage: weddingMessage.trim(),
@@ -142,7 +142,7 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
         </h2>
         <div className="w-12 h-[1px] bg-[#FF4B55]/40 mx-auto my-4" />
         <p className="font-serif italic text-sm text-[#FFFFFF]/80 max-w-sm mx-auto leading-relaxed">
-          Ti preghiamo di compilare le informazioni per aiutarci ad organizzare al meglio i tavoli e il catering.
+          Ti preghiamo di compilare le informazioni per aiutarci ad organizzare al meglio la presenza ed eventuali intolleranze.
         </p>
       </div>
 
@@ -168,19 +168,36 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
       ) : (
         <form onSubmit={handleSubmit} className="space-y-6">
           
-          {/* Main Guest Name */}
-          <div className="flex flex-col">
-            <label className="text-xs font-sans font-bold tracking-[0.2em] text-[#CEB381] uppercase mb-2">
-              Nome & Cognome principale *
-            </label>
-            <input
-              type="text"
-              required
-              placeholder="es. Alessandro De Angelis"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="px-4 py-3 bg-[#0D2C1E] border border-[#CEB381] text-sm focus:outline-hidden focus:border-white/30 rounded-none transition-all text-[#FFFFFF] placeholder:opacity-50"
-            />
+          {/* Main Guest Name & Surname */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="flex flex-col">
+              <label className="text-xs font-sans font-bold tracking-[0.2em] text-[#CEB381] uppercase mb-2">
+                Nome *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="es. Maria Concetta"
+                value={firstName}
+                onChange={(e) => setFirstName(e.target.value)}
+                className="px-4 py-3 bg-[#0D2C1E] border border-[#CEB381] text-sm focus:outline-hidden focus:border-white/30 rounded-none transition-all text-[#FFFFFF] placeholder:opacity-50"
+              />
+              <span className="text-[10px] text-[#CEB381]/70 font-sans mt-1">Puoi inserire anche nomi composti (es. Maria Concetta)</span>
+            </div>
+
+            <div className="flex flex-col">
+              <label className="text-xs font-sans font-bold tracking-[0.2em] text-[#CEB381] uppercase mb-2">
+                Cognome *
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="es. De Angelis"
+                value={lastName}
+                onChange={(e) => setLastName(e.target.value)}
+                className="px-4 py-3 bg-[#0D2C1E] border border-[#CEB381] text-sm focus:outline-hidden focus:border-white/30 rounded-none transition-all text-[#FFFFFF] placeholder:opacity-50"
+              />
+            </div>
           </div>
 
           {/* Attendance Selection */}
@@ -234,31 +251,8 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
               
               <div className="border-b border-[#CEB381] pb-3">
                 <span className="text-xs font-sans font-bold tracking-[0.2em] text-[#FFFFFF] block uppercase">
-                  🍳 Preferenze del Ospite Principale
+                  🍳 Note e Segnalazioni dell'Ospite Principale
                 </span>
-              </div>
-
-              {/* Menu preference list */}
-              <div className="flex flex-col">
-                <label className="text-[11px] font-sans font-bold tracking-[0.2em] text-[#CEB381] uppercase mb-2 flex items-center gap-1.5">
-                  <Wine className="w-3.5 h-3.5" /> PREFERENZA MENU
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {menuOptions.map((opt) => (
-                    <button
-                      key={opt}
-                      type="button"
-                      onClick={() => setMenuPreference(opt)}
-                      className={`py-2 px-1 text-[11px] transition-all text-center rounded-none font-sans uppercase tracking-wider cursor-pointer border ${
-                        menuPreference === opt
-                          ? 'bg-[#FF4B55] text-[#FAF6F0] border-[#FF4B55] font-bold'
-                          : 'bg-transparent text-[#FFFFFF] border-[#CEB381] hover:bg-[#13442D]'
-                      }`}
-                    >
-                      {opt}
-                    </button>
-                  ))}
-                </div>
               </div>
 
               {/* Dietary requirements & Intolerances */}
@@ -324,29 +318,6 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest }: RSVPFormProps) {
                             onChange={(e) => handleCompanionChange(comp.id, 'name', e.target.value)}
                             className="px-2.5 py-1.5 bg-[#0D2C1E] border border-[#CEB381] text-sm focus:outline-hidden text-[#FFFFFF]"
                           />
-                        </div>
-
-                        {/* Companion Menu selector grid */}
-                        <div className="flex flex-col">
-                          <label className="text-[11px] font-bold uppercase text-[#CEB381] tracking-wider mb-1.5">
-                            Preferenza Menu
-                          </label>
-                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-1.5">
-                            {menuOptions.map((opt) => (
-                              <button
-                                key={opt}
-                                type="button"
-                                onClick={() => handleCompanionChange(comp.id, 'menuPreference', opt)}
-                                className={`py-1.5 text-[11px] text-center uppercase tracking-wider transition-all border ${
-                                  comp.menuPreference === opt
-                                    ? 'bg-[#FF4B55] text-[#FAF6F0] border-[#FF4B55] font-semibold'
-                                    : 'bg-[#0D2C1E] text-[#FFFFFF] border-[#CEB381] hover:bg-[#0D2C1E]/50'
-                                }`}
-                              >
-                                {opt}
-                              </button>
-                            ))}
-                          </div>
                         </div>
 
                         {/* Intolerances */}

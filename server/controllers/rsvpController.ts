@@ -30,12 +30,36 @@ export class RsvpController {
 
       // 0. Verify against pre-loaded guest list
       const guestList = await GuestListModel.getAll();
-      const inputName = rsvp.name.trim().toLowerCase();
+
+      const normalizeName = (str: string) => {
+        return (str || '')
+          .toLowerCase()
+          .normalize("NFD")
+          .replace(/[\u0300-\u036f]/g, "") // remove accents
+          .replace(/[^a-z0-9]/g, " ")       // replace non-alphanumeric with space
+          .replace(/\s+/g, " ")             // collapse multi-spaces
+          .trim();
+      };
+
+      const normFirstName = rsvp.firstName ? normalizeName(rsvp.firstName) : '';
+      const normLastName = rsvp.lastName ? normalizeName(rsvp.lastName) : '';
+      const normFullName = normalizeName(rsvp.name || `${rsvp.firstName || ''} ${rsvp.lastName || ''}`);
 
       const matchingGuest = guestList.find(e => {
-        const fullNormal = `${e.nome.trim()} ${e.cognome.trim()}`.toLowerCase();
-        const fullReverse = `${e.cognome.trim()} ${e.nome.trim()}`.toLowerCase();
-        return fullNormal === inputName || fullReverse === inputName;
+        const dbNome = normalizeName(e.nome);
+        const dbCognome = normalizeName(e.cognome);
+        const dbFullNormal = `${dbNome} ${dbCognome}`.trim();
+        const dbFullReverse = `${dbCognome} ${dbNome}`.trim();
+
+        // Direct field-to-field match if separate inputs were sent
+        if (normFirstName && normLastName) {
+          if ((dbNome === normFirstName && dbCognome === normLastName) || (dbNome === normLastName && dbCognome === normFirstName)) {
+            return true;
+          }
+        }
+
+        // Combined string comparison as fallback/reverse check
+        return dbFullNormal === normFullName || dbFullReverse === normFullName;
       });
 
       if (!matchingGuest) {

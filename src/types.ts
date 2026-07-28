@@ -6,7 +6,7 @@
 export interface Companion {
   id: string;
   name: string;
-  menuPreference: string;
+  menuPreference?: string;
   dietaryRequirements: string;
 }
 
@@ -21,8 +21,10 @@ export interface GuestbookPhoto {
 export interface RSVPGuest {
   id: string;
   name: string;
+  firstName?: string;
+  lastName?: string;
   attending: 'yes' | 'no' | 'maybe';
-  menuPreference: string;
+  menuPreference?: string;
   dietaryRequirements: string;
   companions: Companion[];
   weddingMessage: string;

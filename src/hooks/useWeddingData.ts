@@ -8,15 +8,15 @@ import { WeddingConfig, RSVPGuest, GuestbookPhoto, HistoryEvent, GuestListEntry 
 
 // Tuscany defaults
 const DEFAULT_CONFIG: WeddingConfig = {
-  sposoName: 'Alessandro',
-  sposaName: 'Beatrice',
-  weddingDate: '2026-09-12T15:30:00.000Z',
+  sposoName: 'Davide',
+  sposaName: 'Cristiana',
+  weddingDate: '2026-12-21T12:00:00.000Z',
   welcomeMessage: 'Con grandissima gioia ed emozioni indescrivibili, vi invitiamo a condividere con noi il giorno più importante della nostra vita.',
   ourStory: 'Ci siamo incontrati per caso in una sera d\'autunno e, da quel momento, non abbiamo mai smesso di camminare fianco a fianco. Dopo anni colmi d\'amore, risate e viaggi indimenticabili, abbiamo deciso di pronunciare il nostro "Sì" definitivo e dare inizio a questa meravigliosa avventura nuziale.',
   venueCeremony: {
     name: 'Abbazia di San Galgano',
     address: 'Strada Comunale di San Galgano, 53012 Chiusdino SI, Italia',
-    time: '15:30',
+    time: '12:00',
     latitude: 43.1492,
     longitude: 11.1541,
     description: 'La nostra cerimonia civile si terrà nella suggestiva cornice dell\'abbazia cistercense del XIII secolo, celebre per essere rimasta senza tetto, dove il cielo fa da soffitto all\'amore.',
@@ -59,7 +59,14 @@ export function useWeddingData() {
     }
   });
 
-  const [guestList, setGuestList] = useState<GuestListEntry[]>([]);
+  const [guestList, setGuestList] = useState<GuestListEntry[]>(() => {
+    try {
+      const saved = localStorage.getItem('wedding_guest_list');
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
   const [historyList, setHistoryList] = useState<HistoryEvent[]>([]);
 
   const [isLoading, setIsLoading] = useState(true);
@@ -105,6 +112,7 @@ export function useWeddingData() {
       if (guestListRes.ok) {
         const guestListData = await guestListRes.json();
         setGuestList(guestListData);
+        localStorage.setItem('wedding_guest_list', JSON.stringify(guestListData));
       }
 
     } catch (err) {
@@ -312,6 +320,9 @@ export function useWeddingData() {
         if (isJson) {
           const data = await res.json();
           setGuestList(data.list);
+          try {
+            localStorage.setItem('wedding_guest_list', JSON.stringify(data.list));
+          } catch {}
           fetchHistoryList();
           return { success: true, summary: data.summary };
         } else {

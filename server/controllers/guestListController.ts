@@ -33,148 +33,70 @@ export class GuestListController {
       }
 
       if (!guests || !Array.isArray(guests) || guests.length === 0) {
-        res.status(400).json({ error: 'La lista degli invitati non può essere vuota o nulla.' });
+        res.status(400).json({ error: 'La lista degli invitati JSON non può essere vuota.' });
         return;
       }
 
-      // Read current guest list and previous filename
       const currentList = await GuestListModel.getAll();
-      const previousFilename = await GuestListModel.getLastFilename();
 
-      const hasPreviousFile = previousFilename !== '';
-      const isNewFilename = hasPreviousFile && fileName !== '' && fileName !== previousFilename;
+      // Format and parse incoming JSON guests
+      const parsedGuests: typeof currentList = guests.map((g: any, index: number) => {
+        const nome = String(g.nome || g.NOME || g.NAME || '').trim();
+        const cognome = String(g.cognome || g.COGNOME || g.SURNAME || '').trim();
+        const cell = String(g.cell || g.CELL || g.PHONE || g.TELEFONO || '').trim();
+        const email = String(g.email || g.EMAIL || g.MAIL || '').trim();
+        return {
+          id: g.id || `gl_json_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 6)}`,
+          nome,
+          cognome,
+          cell,
+          email
+        };
+      }).filter(g => g.nome !== '' || g.cognome !== '');
 
-      let isOverwritten = false;
-      let effectiveCurrentList = currentList;
-
-      if (isNewFilename) {
-        effectiveCurrentList = []; // Ignore existing list for matching, treats all as new additions
-        isOverwritten = true;
+      if (parsedGuests.length === 0) {
+        res.status(400).json({ error: 'Nessun invitato valido con Nome o Cognome trovato nel JSON.' });
+        return;
       }
 
-      // Normalize name helper for matching: lowercases, removes accents, extracts alphanumeric tokens
-      const normalizeName = (name: string) => {
-        return name
+      // De-duplicate incoming array by normalized Nome + Cognome
+      const normalizeName = (str: string) => {
+        return (str || '')
           .toLowerCase()
           .normalize("NFD")
-          .replace(/[\u0300-\u036f]/g, "") // remove accents
-          .replace(/[^a-z0-9]/g, " ")       // replace special characters with spaces
-          .replace(/\s+/g, " ")             // collapse multi-spaces
+          .replace(/[\u0300-\u036f]/g, "")
+          .replace(/[^a-z0-9]/g, " ")
+          .replace(/\s+/g, " ")
           .trim();
       };
 
-      // Index effective list by normalized "nome|cognome"
-      const currentMap = new Map<string, typeof currentList[0]>();
-      effectiveCurrentList.forEach(g => {
-        const key = `${normalizeName(g.nome)}|${normalizeName(g.cognome)}`;
-        if (key && !currentMap.has(key)) {
-          currentMap.set(key, g);
-        }
-      });
-
-      // Format and parse incoming guests
-      const incomingGuests = guests.map((g: any) => ({
-        nome: String(g.nome || g.NOME || '').trim(),
-        cognome: String(g.cognome || g.COGNOME || '').trim(),
-        cell: String(g.cell || g.CELL || '').trim(),
-        email: String(g.email || g.EMAIL || '').trim(),
-      })).filter(g => g.nome !== '' || g.cognome !== '');
-
-      if (incomingGuests.length === 0) {
-        res.status(400).json({ error: 'Nessun invitato valido (con Nome o Cognome) trovato nella lista.' });
-        return;
-      }
-
       const finalGuests: typeof currentList = [];
-      const processedIncomingKeys = new Set<string>();
+      const seenKeys = new Set<string>();
 
-      let addedCount = 0;
-      let updatedCount = 0;
-      let keptCount = 0;
-
-      // 1. Process incoming list
-      incomingGuests.forEach((g, index) => {
+      parsedGuests.forEach(g => {
         const key = `${normalizeName(g.nome)}|${normalizeName(g.cognome)}`;
-        if (processedIncomingKeys.has(key)) {
-          // Skip subsequent duplicate rows in the uploaded spreadsheet
-          return;
-        }
-        processedIncomingKeys.add(key);
-
-        const existing = currentMap.get(key);
-        if (existing) {
-          // Check if contact info has changed
-          const hasChanged = existing.cell !== g.cell || existing.email !== g.email;
-          if (hasChanged) {
-            updatedCount++;
-          } else {
-            keptCount++;
-          }
-
-          finalGuests.push({
-            id: existing.id,
-            nome: existing.nome, // Keep original casing/naming
-            cognome: existing.cognome,
-            cell: g.cell || existing.cell,
-            email: g.email || existing.email,
-          });
-        } else {
-          // New guest addition!
-          addedCount++;
-          finalGuests.push({
-            id: `gl_upload_${Date.now()}_${index}_${Math.random().toString(36).substring(2, 5)}`,
-            nome: g.nome,
-            cognome: g.cognome,
-            cell: g.cell,
-            email: g.email,
-          });
+        if (!seenKeys.has(key)) {
+          seenKeys.add(key);
+          finalGuests.push(g);
         }
       });
 
-      // Calculate deleted count
-      let deletedCount = 0;
-      if (isOverwritten) {
-        deletedCount = currentList.length;
-      } else {
-        const deletedGuests = currentList.filter(cg => {
-          const key = `${normalizeName(cg.nome)}|${normalizeName(cg.cognome)}`;
-          return !processedIncomingKeys.has(key);
-        });
-        deletedCount = deletedGuests.length;
-      }
-
-      // Persist the unified synced guest list
+      // Completely replace stored list in app memory (wedding_guest_list.json)
       await GuestListModel.saveAll(finalGuests);
 
-      // Persist the new filename metadata if provided
       if (fileName) {
         await GuestListModel.saveLastFilename(fileName);
       }
 
-      // Log detailed history event of synchronization
-      let syncMessage = '';
-      if (isOverwritten) {
-        syncMessage = `Lista Sostituita Interamente (File differente rilevato: "${fileName}" risp. a "${previousFilename}"). Caricati ${finalGuests.length} invitati totali, rimossi tutti i ${currentList.length} precedenti.`;
-      } else {
-        syncMessage = `Lista Sincronizzata (Stesso file rilevato: "${fileName || 'Excel/CSV'}"). Caricati ${finalGuests.length} invitati totali.`;
-        if (addedCount > 0 || deletedCount > 0 || updatedCount > 0) {
-          syncMessage += ` Variazioni: +${addedCount} aggiunti, -${deletedCount} rimossi, ~${updatedCount} aggiornati, ${keptCount} invariati.`;
-        } else {
-          syncMessage += ` Nessuna variazione rilevata.`;
-        }
-      }
+      const syncMessage = `Elenco invitati JSON aggiornato e memorizzato in app (${finalGuests.length} invitati totali).`;
 
       await HistoryModel.logEvent(
         'GUEST_LIST_UPLOADED',
         syncMessage,
         {
           total: finalGuests.length,
-          added: addedCount,
-          deleted: deletedCount,
-          updated: updatedCount,
-          kept: keptCount,
-          fileName,
-          isOverwritten
+          previousTotal: currentList.length,
+          fileName
         }
       );
 
@@ -183,18 +105,15 @@ export class GuestListController {
         list: finalGuests,
         summary: {
           total: finalGuests.length,
-          added: addedCount,
-          deleted: deletedCount,
-          updated: updatedCount,
-          kept: keptCount,
-          isOverwritten,
-          fileName,
-          previousFilename
+          added: finalGuests.length,
+          updated: 0,
+          isOverwritten: true,
+          fileName
         }
       });
     } catch (err: any) {
       console.error('❌ Error in uploadGuestList Controller:', err);
-      res.status(500).json({ error: 'Errore durante la sincronizzazione della lista caricata.', details: err.message });
+      res.status(500).json({ error: 'Errore durante il salvataggio della lista invitati JSON.', details: err.message });
     }
   }
 

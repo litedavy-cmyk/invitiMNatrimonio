@@ -4,9 +4,8 @@
  */
 
 import React, { useState } from 'react';
-import * as XLSX from 'xlsx';
 import { 
-  Users, UserCheck, UserX, Cake, Sliders, Calendar, 
+  Users, UserCheck, UserX, Sliders, Calendar, 
   MapPin, Settings, ScrollText, CheckCircle, Trash2, HeartHandshake,
   Download, Search, Filter, AlertTriangle, Clock, Activity, FileText,
   Upload, ShieldCheck, RotateCcw
@@ -47,7 +46,10 @@ export default function AdminPanel({
   const [filterStatus, setFilterStatus] = useState<'all' | 'yes' | 'no' | 'maybe'>('all');
 
   const [guestSearchTerm, setGuestSearchTerm] = useState('');
-  const [isUploadingXls, setIsUploadingXls] = useState(false);
+  const [isUploadingJson, setIsUploadingJson] = useState(false);
+  const [jsonEditorModalOpen, setJsonEditorModalOpen] = useState(false);
+  const [jsonInputText, setJsonInputText] = useState('');
+  const [jsonEditorError, setJsonEditorError] = useState<string | null>(null);
 
   // Elegant in-app confirmation modal states (safe from iframe blocks)
   const [activeModal, setActiveModal] = useState<'system_reset' | 'clear_rsvps' | 'delete_rsvp' | 'clear_history' | null>(null);
@@ -55,78 +57,133 @@ export default function AdminPanel({
   const [resetInputConfirmation, setResetInputConfirmation] = useState('');
   const [modalStatus, setModalStatus] = useState<{ type: 'idle' | 'executing' | 'success' | 'error'; message?: string }>({ type: 'idle' });
 
-  const handleXlsUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Helper to parse and validate guest list JSON input
+  const parseAndValidateGuestJson = (rawData: any): { nome: string; cognome: string; cell: string; email: string }[] => {
+    let guestArray: any[] = [];
+    if (Array.isArray(rawData)) {
+      guestArray = rawData;
+    } else if (rawData && typeof rawData === 'object') {
+      if (Array.isArray(rawData.guests)) guestArray = rawData.guests;
+      else if (Array.isArray(rawData.invitati)) guestArray = rawData.invitati;
+      else if (Array.isArray(rawData.guestList)) guestArray = rawData.guestList;
+      else if (Array.isArray(rawData.list)) guestArray = rawData.list;
+      else if (Array.isArray(rawData.data)) guestArray = rawData.data;
+    }
+
+    if (!Array.isArray(guestArray) || guestArray.length === 0) {
+      throw new Error("Il JSON deve contenere un array di ospiti (es. [{\"nome\": \"...\", \"cognome\": \"...\", \"email\": \"...\", \"cell\": \"...\"}]).");
+    }
+
+    const parsed = guestArray.map((row: any) => {
+      if (typeof row !== 'object' || row === null) return null;
+      const keys = Object.keys(row);
+      const findKeyVal = (validNames: string[]) => {
+        const foundKey = keys.find(k => validNames.includes(k.trim().toUpperCase()));
+        return foundKey ? String(row[foundKey] || '').trim() : '';
+      };
+
+      return {
+        nome: findKeyVal(['NOME', 'NAME', 'FIRST_NAME', 'FIRSTNAME', 'NOME INVITATO']) || String(row.nome || '').trim(),
+        cognome: findKeyVal(['COGNOME', 'SURNAME', 'LAST_NAME', 'LASTNAME', 'COGNOME INVITATO']) || String(row.cognome || '').trim(),
+        cell: findKeyVal(['CELL', 'CELLULARE', 'PHONE', 'TELEFONO', 'NUMERO', 'MOBILE', 'TEL']) || String(row.cell || '').trim(),
+        email: findKeyVal(['EMAIL', 'E-MAIL', 'MAIL', 'IND_EMAIL']) || String(row.email || '').trim()
+      };
+    }).filter(r => r !== null && (r.nome !== '' || r.cognome !== '')) as { nome: string; cognome: string; cell: string; email: string }[];
+
+    if (parsed.length === 0) {
+      throw new Error("Nessun invitato valido (con campo Nome o Cognome) trovato nel JSON.");
+    }
+
+    return parsed;
+  };
+
+  const handleJsonFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    setIsUploadingXls(true);
+    setIsUploadingJson(true);
     const reader = new FileReader();
     reader.onload = async (evt) => {
       try {
-        const data = evt.target?.result;
-        const workbook = XLSX.read(data, { type: 'array' });
-        const sheetName = workbook.SheetNames[0];
-        const sheet = workbook.Sheets[sheetName];
-        const rawJson = XLSX.utils.sheet_to_json(sheet) as any[];
-
-        if (rawJson.length === 0) {
-          alert("Errore: Il file caricato è vuoto.");
-          setIsUploadingXls(false);
-          return;
+        const text = evt.target?.result as string;
+        let rawData: any;
+        try {
+          rawData = JSON.parse(text);
+        } catch (pErr: any) {
+          throw new Error("Sintassi JSON non valida: " + pErr.message);
         }
 
-        // Parse list and map keys to nome, cognome, cell, email (case-insensitive keys)
-        const parsed = rawJson.map((row: any) => {
-          const keys = Object.keys(row);
-          const findKeyVal = (validNames: string[]) => {
-            const foundKey = keys.find(k => validNames.includes(k.trim().toUpperCase()));
-            return foundKey ? String(row[foundKey] || '').trim() : '';
-          };
-
-          return {
-            nome: findKeyVal(['NOME', 'NAME', 'NOME INVITATO', 'FIRST_NAME', 'FIRSTNAME']),
-            cognome: findKeyVal(['COGNOME', 'SURNAME', 'LAST_NAME', 'LASTNAME', 'COGNOME INVITATO']),
-            cell: findKeyVal(['CELL', 'CELLULARE', 'PHONE', 'TELEFONO', 'NUMERO', 'MOBILE']),
-            email: findKeyVal(['EMAIL', 'E-MAIL', 'MAIL', 'IND_EMAIL'])
-          };
-        });
-
-        // "La lista non può essere nulla" - verify that at least some rows map successfully
-        const validList = parsed.filter(r => r.nome !== '' || r.cognome !== '');
-        if (validList.length === 0) {
-          alert("Nessun invitato valido (con Nome o Cognome) trovato. Verifica che le colonne del file si chiamino NOME, COGNOME, CELL, EMAIL.");
-          setIsUploadingXls(false);
-          return;
-        }
-
+        const validList = parseAndValidateGuestJson(rawData);
         const result = await onUploadGuestList(validList, file.name);
+
         if (result && result.success) {
           const s = result.summary;
-          if (s.isOverwritten) {
-            alert(`Sostituzione completa completata!\n\n` +
-                  `Rilevato file differente ("${file.name}" rispetto a "${s.previousFilename || 'nessuno'}").\n` +
-                  `La lista precedente è stata completamente sovrascritta, caricando solo gli invitati di questo nuovo file.\n\n` +
-                  `• Invitati totali importati: ${s.total}\n` +
-                  `• Precedenti rimossi: ${s.deleted}`);
-          } else {
-            alert(`Sincronizzazione completata con successo!\n\n` +
-                  `Rilevato lo stesso file ("${file.name}"). Eseguita riconciliazione intelligente (nessun doppione):\n\n` +
-                  `• Invitati totali salvati: ${s.total}\n` +
-                  `• Nuovi aggiunti rispetto a prima: ${s.added}\n` +
-                  `• Rimossi (non più presenti nel file): ${s.deleted}\n` +
-                  `• Informazioni contatti aggiornate: ${s.updated}\n` +
-                  `• Invariati: ${s.kept}`);
-          }
+          alert(`Elenco invitati JSON aggiornato e memorizzato con successo!\n\n` +
+                `• Invitati totali memorizzati: ${s.total}\n` +
+                `• Nuovi aggiunti: ${s.added}\n` +
+                `• Contatti aggiornati: ${s.updated}`);
         }
       } catch (err: any) {
         console.error(err);
-        alert("Errore durante l'interpretazione del file Excel: " + err.message);
+        alert("Errore caricamento file JSON: " + err.message);
       } finally {
-        setIsUploadingXls(false);
-        if (e.target) e.target.value = ''; // Reset input element
+        setIsUploadingJson(false);
+        if (e.target) e.target.value = '';
       }
     };
-    reader.readAsArrayBuffer(file);
+    reader.readAsText(file);
+  };
+
+  const handleOpenJsonEditor = () => {
+    const currentData = guestList.length > 0 
+      ? guestList.map(({ nome, cognome, email, cell }) => ({ nome, cognome, email, cell })) 
+      : [
+          { nome: "Mario", cognome: "Rossi", email: "mario.rossi@example.com", cell: "3331234567" },
+          { nome: "Giuseppe", cognome: "Verdi", email: "giuseppe.verdi@example.com", cell: "3389876543" }
+        ];
+    setJsonInputText(JSON.stringify(currentData, null, 2));
+    setJsonEditorError(null);
+    setJsonEditorModalOpen(true);
+  };
+
+  const handleSaveJsonFromEditor = async () => {
+    setJsonEditorError(null);
+    try {
+      let rawData: any;
+      try {
+        rawData = JSON.parse(jsonInputText);
+      } catch (pErr: any) {
+        throw new Error("Sintassi JSON errata: " + pErr.message);
+      }
+
+      const validList = parseAndValidateGuestJson(rawData);
+      setIsUploadingJson(true);
+
+      const result = await onUploadGuestList(validList, 'json_editor.json');
+      if (result && result.success) {
+        setJsonEditorModalOpen(false);
+        alert(`Lista invitati JSON salvata e memorizzata nell'applicazione con successo! (${validList.length} invitati abilitati).`);
+      } else {
+        throw new Error(result?.error || "Errore durante il salvataggio.");
+      }
+    } catch (err: any) {
+      setJsonEditorError(err.message);
+    } finally {
+      setIsUploadingJson(false);
+    }
+  };
+
+  const handleExportJson = () => {
+    const dataToExport = guestList.map(({ nome, cognome, cell, email }) => ({ nome, cognome, email, cell }));
+    const jsonStr = JSON.stringify(dataToExport, null, 2);
+    const blob = new Blob([jsonStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'lista_invitati.json';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const handleExecuteSystemReset = async () => {
@@ -222,31 +279,24 @@ export default function AdminPanel({
   const nonAttendingList = rsvps.filter(g => g.attending === 'no');
 
   let totalGuestsCount = 0; // Primary guests + companions
-  let menusBreakdown: Record<string, number> = {};
   let dietaryAlerts: Array<{ guestName: string; requirement: string }> = [];
 
-  // Loop through RSVPs to parse companions and menus
+  // Loop through RSVPs to parse companions and dietary requirements
   rsvps.forEach(g => {
     if (g.attending === 'no') return; // Not coming, skip counting
 
     // Primary guest count
     totalGuestsCount += 1;
-    
-    // Primary guest menu
-    const pMenu = g.menuPreference || 'Standard';
-    menusBreakdown[pMenu] = (menusBreakdown[pMenu] || 0) + 1;
 
     // Primary guest dietary
     if (g.dietaryRequirements) {
       dietaryAlerts.push({ guestName: g.name, requirement: g.dietaryRequirements });
     }
 
-    // Companions counts and preferences inside
+    // Companions counts
     if (g.companions && g.companions.length > 0) {
       g.companions.forEach(comp => {
         totalGuestsCount += 1;
-        const cMenu = comp.menuPreference || 'Standard';
-        menusBreakdown[cMenu] = (menusBreakdown[cMenu] || 0) + 1;
 
         if (comp.dietaryRequirements) {
           dietaryAlerts.push({ guestName: `${comp.name} (acc. di ${g.name})`, requirement: comp.dietaryRequirements });
@@ -302,7 +352,7 @@ export default function AdminPanel({
     }
   };
 
-  // Export CSV download function for caterings
+  // Export CSV download function
   const handleExportCSV = () => {
     if (rsvps.length === 0) {
       alert('Nessun dato presente da esportare.');
@@ -312,17 +362,16 @@ export default function AdminPanel({
     let csvContent = 'data:text/csv;charset=utf-8,';
     
     // Clear CSV Headers
-    csvContent += 'ID;Invitato Principale;Stato Presenza;Menu Principal;Diete e Intolleranze;Timestamp;Accompagnatori Nomi e Menu\n';
+    csvContent += 'ID;Invitato Principale;Stato Presenza;Diete e Intolleranze;Timestamp;Accompagnatori Nomi\n';
 
     rsvps.forEach(g => {
-      // Format companion names and individual preferences
-      const companionDetails = (g.companions || []).map(c => `${c.name} (${c.menuPreference}${c.dietaryRequirements ? ' - ' + c.dietaryRequirements : ''})`).join(' | ');
+      // Format companion names and individual requirements
+      const companionDetails = (g.companions || []).map(c => `${c.name}${c.dietaryRequirements ? ' - ' + c.dietaryRequirements : ''}`).join(' | ');
 
       const row = [
         g.id,
         g.name.replace(/;/g, ','),
         g.attending.toUpperCase(),
-        g.menuPreference || 'Standard',
         (g.dietaryRequirements || '').replace(/;/g, ','),
         g.timestamp,
         companionDetails.replace(/;/g, ',')
@@ -334,7 +383,7 @@ export default function AdminPanel({
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `CATERING_WEDDING_GUESTS_${config.sposoName}_${config.sposaName}.csv`);
+    link.setAttribute('download', `LISTA_INVITATI_WEDDING_${config.sposoName}_${config.sposaName}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -360,7 +409,7 @@ export default function AdminPanel({
           </div>
           <div>
             <h2 className="font-serif text-2xl font-normal text-[#FFFFFF] tracking-wide">Pannello di Controllo Sposi</h2>
-            <p className="text-[10px] font-sans uppercase tracking-[0.22em] text-[#FF4B55] font-bold">CONFIGURAZIONE LANDING & REPORT CATERING</p>
+            <p className="text-[10px] font-sans uppercase tracking-[0.22em] text-[#FF4B55] font-bold">CONFIGURAZIONE LANDING & MONITORAGGIO PRESENZE</p>
           </div>
         </div>
 
@@ -430,52 +479,20 @@ export default function AdminPanel({
 
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            
-            {/* Realtime Menu breakdowns for catering */}
-            <div className="bg-transparent p-6 rounded-none border border-[#CEB381]">
-              <div className="flex justify-between items-center mb-4">
+          <div className="grid grid-cols-1 gap-8">
+            {/* Intolerance & Dietary Alerts dashboard */}
+            <div className="bg-transparent p-6 rounded-none border border-[#CEB381] space-y-4">
+              <div className="flex justify-between items-center border-b border-[#CEB381] pb-3">
                 <h3 className="font-serif text-lg font-normal text-[#FFFFFF] flex items-center gap-1.5">
-                  <Cake className="w-5 h-5 text-[#FF4B55]" /> Richiesta Menù Catering
+                  <AlertTriangle className="w-5 h-5 text-[#FF4B55]" /> Allergie / Segnalazioni Alimentari
                 </h3>
                 <button
                   onClick={handleExportCSV}
-                  className="bg-[#FFFFFF] text-[#0D2C1E] hover:bg-[#FF4B55] hover:text-[#FFFFFF] text-white p-1 px-2.5 text-[9px] uppercase tracking-wider font-bold rounded-none flex items-center gap-1 transition-all cursor-pointer"
+                  className="bg-[#FFFFFF] text-[#0D2C1E] hover:bg-[#FF4B55] hover:text-[#FFFFFF] transition-all p-1.5 px-3 text-[10px] uppercase tracking-wider font-bold rounded-none flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Download className="w-3 h-3" /> Esporta CSV
+                  <Download className="w-3.5 h-3.5" /> Esporta Lista CSV
                 </button>
               </div>
-
-              {totalGuestsCount === 0 ? (
-                <p className="text-xs italic text-[#FFFFFF]/50 py-10 text-center">Nessuna preferenza registrata</p>
-              ) : (
-                <div className="space-y-4">
-                  {Object.entries(menusBreakdown).map(([menuName, count]) => {
-                    const pct = Math.round((count / totalGuestsCount) * 100);
-                    return (
-                      <div key={menuName} className="space-y-1">
-                        <div className="flex justify-between text-[11px] font-semibold text-[#FFFFFF]">
-                          <span className="uppercase tracking-wider font-mono text-[10px]">{menuName}</span>
-                          <span className="font-mono text-[10.5px]">{count} su {totalGuestsCount} coperti ({pct}%)</span>
-                        </div>
-                        <div className="h-2 bg-[#13442D] rounded-none overflow-hidden border border-[#CEB381]">
-                          <div 
-                            className="h-full bg-[#FF4B55] rounded-none" 
-                            style={{ width: `${pct}%` }} 
-                          />
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-
-            {/* Intolerance & Dietary Alerts dashboard */}
-            <div className="bg-transparent p-6 rounded-none border border-[#CEB381] space-y-4">
-              <h3 className="font-serif text-lg font-normal text-[#FFFFFF] flex items-center gap-1.5 border-b border-[#CEB381] pb-3">
-                <AlertTriangle className="w-5 h-5 text-[#FF4B55]" /> Allergie / Segnalazioni Alimentari
-              </h3>
 
               {dietaryAlerts.length === 0 ? (
                 <p className="text-xs italic text-[#FFFFFF]/50 py-8 text-center">Nessun'allergia inserita dagli invitati o accompagnatori.</p>
@@ -493,7 +510,6 @@ export default function AdminPanel({
                 </div>
               )}
             </div>
-
           </div>
 
           {/* Suite Manutenzione */}
@@ -536,34 +552,54 @@ export default function AdminPanel({
       {activeTab === 'guests' && (
         <div className="space-y-8 animate-fadeIn">
           
-          {/* Sezione Caricamento Excel Prominente */}
+          {/* Sezione Caricamento/Configurazione JSON Prominente */}
           <div className="bg-[#FAF7F2] border-2 border-[#FF4B55]/20 p-6 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-1.5 h-full bg-[#FF4B55]" />
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 flex-grow">
               <h4 className="font-serif text-[15px] font-bold text-[#0D2C1E] flex items-center gap-2">
-                <ShieldCheck className="w-5 h-5 text-[#FF4B55]" /> CONFIGURAZIONE LISTA DI INGRESSO (VERIFICATORE EXCEL)
+                <ShieldCheck className="w-5 h-5 text-[#FF4B55]" /> CONFIGURAZIONE LISTA DI INGRESSO (INSERIMENTO JSON)
               </h4>
               <p className="text-xs text-[#0D2C1E]/85 font-sans leading-relaxed max-w-4xl font-medium">
-                Carica qui il file in formato Excel o CSV contenente la lista ufficiale degli invitati. Chi compila l'RSVP pubblico verrà cercato in questo elenco e autorizzato solo in caso di corrispondenza esatta di Nome e Cognome.
-                Assicurati che le colonne del foglio di calcolo siano intestate con: <strong className="text-[#FF4B55] font-extrabold">NOME, COGNOME, CELL, EMAIL</strong>. La lista non può essere nulla.
+                Imposta o aggiorna la lista ufficiale degli invitati direttamente in formato <strong>JSON</strong>. Chi compila l'RSVP pubblico verrà cercato in questo elenco memorizzato e autorizzato solo in caso di corrispondenza esatta di Nome e Cognome.
+                Formato richiesto: <strong className="text-[#FF4B55] font-extrabold">[&#123;"nome": "...", "cognome": "...", "email": "...", "cell": "..."&#125;]</strong>.
               </p>
               <div className="flex items-center gap-2 pt-2 text-xs font-sans text-[#FF4B55] font-bold">
                 <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-600 animate-pulse" />
-                <span>STATO DI CONTROLLO: {guestList.length} invitati abilitati attualmente impostati e persistiti in memoria.</span>
+                <span>STATO DI CONTROLLO: {guestList.length} invitati abilitati attualmente impostati e memorizzati nell'app.</span>
               </div>
             </div>
 
-            <div className="shrink-0 w-full lg:w-auto">
-              <label className="relative cursor-pointer bg-[#0D2C1E] text-[#FFFFFF] hover:bg-[#FF4B55] py-3.5 px-6 text-xs font-bold uppercase tracking-widest rounded-none transition-all text-center block w-full lg:inline-block border border-[#0D2C1E]">
-                {isUploadingXls ? 'Elaborazione file...' : 'Carica File .xlsx / .xls'}
+            <div className="shrink-0 flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+              <button
+                type="button"
+                onClick={handleOpenJsonEditor}
+                className="bg-[#0D2C1E] text-[#FFFFFF] hover:bg-[#FF4B55] py-3 px-4 text-xs font-bold uppercase tracking-widest rounded-none transition-all cursor-pointer flex items-center justify-center gap-2 border border-[#0D2C1E]"
+              >
+                <FileText className="w-4 h-4" />
+                <span>Incolla / Modifica JSON</span>
+              </button>
+
+              <label className="relative cursor-pointer bg-[#13442D] text-[#FFFFFF] hover:bg-[#FF4B55] py-3 px-4 text-xs font-bold uppercase tracking-widest rounded-none transition-all text-center block border border-[#CEB381]">
+                {isUploadingJson ? 'Caricamento...' : 'Carica File .json'}
                 <input
                   type="file"
-                  accept=".xlsx,.xls,.csv"
-                  onChange={handleXlsUpload}
-                  disabled={isUploadingXls}
+                  accept=".json"
+                  onChange={handleJsonFileUpload}
+                  disabled={isUploadingJson}
                   className="hidden"
                 />
               </label>
+
+              {guestList.length > 0 && (
+                <button
+                  type="button"
+                  onClick={handleExportJson}
+                  className="bg-white text-[#0D2C1E] hover:bg-[#FF4B55] hover:text-white py-3 px-4 text-xs font-bold uppercase tracking-widest rounded-none transition-all cursor-pointer flex items-center justify-center gap-2 border border-[#0D2C1E]/20"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Esporta JSON</span>
+                </button>
+              )}
             </div>
           </div>
 
@@ -624,7 +660,6 @@ export default function AdminPanel({
                     <tr>
                       <th className="px-4 py-3">Invitato Principale</th>
                       <th className="px-4 py-3">Presenza</th>
-                      <th className="px-4 py-3">Menu</th>
                       <th className="px-4 py-3">Accompagnatori</th>
                       <th className="px-4 py-3">Intolleranze</th>
                       <th className="px-4 py-3">Messaggio per Nozze</th>
@@ -646,16 +681,12 @@ export default function AdminPanel({
                             <span className="inline-flex text-[9px] font-bold bg-rose-600 text-white py-0.5 px-2.5 uppercase tracking-wide border border-rose-500">Assente (No)</span>
                           )}
                         </td>
-                        <td className="px-4 py-3 font-mono text-xs font-semibold">{guest.attending !== 'no' ? guest.menuPreference : '-'}</td>
                         <td className="px-4 py-3">
                           {guest.attending !== 'no' && guest.companions && guest.companions.length > 0 ? (
                             <div className="space-y-2 max-w-xs">
                               {guest.companions.map((comp) => (
                                 <div key={comp.id} className="text-xs leading-relaxed border-l-2 border-[#FF4B55] pl-2 bg-black/10 p-1.5">
                                   <span className="font-bold text-white block">{comp.name}</span>
-                                  <span className="text-zinc-300 font-mono text-[10px] uppercase tracking-wide block mt-0.5">
-                                    Menu: <span className="text-[#CEB381] font-semibold">{comp.menuPreference}</span>
-                                  </span>
                                   {comp.dietaryRequirements && (
                                     <span className="text-amber-300 font-mono text-[9px] tracking-wider block font-bold uppercase mt-0.5">
                                       ⚠️ Diet: {comp.dietaryRequirements}
@@ -700,21 +731,21 @@ export default function AdminPanel({
             )}
           </div>
 
-          {/* Tabella 2: Invitati Certificati Caricati da Excel */}
+          {/* Tabella 2: Invitati Certificati Caricati da JSON */}
           <div className="bg-[#13442D] border border-[#CEB381] p-6 space-y-4">
             <div className="border-b border-[#CEB381] pb-3">
               <h3 className="font-serif text-base font-bold text-[#FFFFFF] flex items-center gap-1.5">
-                <ShieldCheck className="w-5 h-5 text-[#FF4B55]" /> Database Invitati Autorizzati da Excel ({guestList.length})
+                <ShieldCheck className="w-5 h-5 text-[#FF4B55]" /> Database Invitati Autorizzati da JSON ({guestList.length})
               </h3>
-              <p className="text-xs text-zinc-300 font-sans mt-0.5">Elenco completo dei nominativi pre-caricati abilitati a registrare la presenza sul portale.</p>
+              <p className="text-xs text-zinc-300 font-sans mt-0.5">Elenco completo dei nominativi memorizzati e abilitati a registrare la presenza sul portale.</p>
             </div>
 
-            {/* Ricerca per Lista Excel */}
+            {/* Ricerca per Lista JSON */}
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#FF4B55]" />
               <input
                 type="text"
-                placeholder="Filtra la lista autorizzata Excel..."
+                placeholder="Filtra la lista autorizzata JSON..."
                 value={guestSearchTerm}
                 onChange={(e) => setGuestSearchTerm(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 bg-[#0D2C1E]/60 border border-[#CEB381] text-sm font-sans rounded-none focus:outline-hidden text-[#FFFFFF] placeholder:text-zinc-400"
@@ -1097,6 +1128,90 @@ export default function AdminPanel({
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {/* ========================================== */}
+      {/* MODAL EDITOR PER INSERIMENTO/MODIFICA JSON */}
+      {/* ========================================== */}
+      {jsonEditorModalOpen && (
+        <div className="fixed inset-0 bg-[#0D2C1E]/90 flex items-center justify-center p-4 z-50 animate-fadeIn backdrop-blur-xs">
+          <div className="bg-[#13442D] max-w-3xl w-full border-t-4 border-[#FF4B55] p-6 shadow-2xl relative space-y-4 max-h-[90vh] flex flex-col">
+            
+            <button
+              onClick={() => setJsonEditorModalOpen(false)}
+              type="button"
+              className="absolute top-4 right-4 text-zinc-300 hover:text-white transition-colors cursor-pointer text-lg font-sans"
+            >
+              ✕
+            </button>
+
+            <div className="space-y-1">
+              <span className="text-xs font-bold uppercase tracking-widest text-[#FF4B55] block font-sans">
+                CONFIGURAZIONE LISTA INVITATI
+              </span>
+              <h3 className="font-serif text-xl font-bold text-[#FFFFFF]">
+                Incolla o Modifica JSON Invitati
+              </h3>
+              <p className="text-xs text-zinc-300 font-sans leading-relaxed">
+                Inserisci o incolla qui la struttura JSON con la lista completa degli ospiti abilitati. Ciascun elemento deve specificare i campi <code>nome</code>, <code>cognome</code>, <code>email</code>, e <code>cell</code>.
+              </p>
+            </div>
+
+            <div className="flex-grow flex flex-col space-y-2 min-h-[300px]">
+              <textarea
+                value={jsonInputText}
+                onChange={(e) => setJsonInputText(e.target.value)}
+                placeholder='[\n  {\n    "nome": "Mario",\n    "cognome": "Rossi",\n    "email": "mario.rossi@example.com",\n    "cell": "3331234567"\n  }\n]'
+                className="w-full h-full min-h-[280px] p-4 bg-[#0D2C1E] border border-[#CEB381] font-mono text-xs text-[#CEB381] focus:outline-hidden focus:border-[#FF4B55] rounded-none resize-y leading-relaxed"
+                spellCheck={false}
+              />
+
+              {jsonEditorError && (
+                <div className="p-3 bg-rose-950/80 border-l-4 border-rose-500 text-rose-200 text-xs font-mono font-medium">
+                  ⚠️ Errore JSON: {jsonEditorError}
+                </div>
+              )}
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t border-[#CEB381]/30 pt-4">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    const parsed = JSON.parse(jsonInputText);
+                    setJsonInputText(JSON.stringify(parsed, null, 2));
+                    setJsonEditorError(null);
+                  } catch (e: any) {
+                    setJsonEditorError("Impossibile formattare: " + e.message);
+                  }
+                }}
+                className="text-xs text-[#CEB381] hover:text-white underline font-mono cursor-pointer self-start sm:self-auto"
+              >
+                Formatta / Auto-indent JSON
+              </button>
+
+              <div className="flex items-center gap-2.5 w-full sm:w-auto justify-end">
+                <button
+                  type="button"
+                  onClick={() => setJsonEditorModalOpen(false)}
+                  className="py-2.5 px-4 bg-transparent hover:bg-white hover:text-[#0D2C1E] text-white font-bold uppercase tracking-widest text-xs font-sans transition-all cursor-pointer rounded-none border border-white/20"
+                >
+                  Annulla
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleSaveJsonFromEditor}
+                  disabled={isUploadingJson}
+                  className="py-2.5 px-5 bg-[#FF4B55] hover:bg-rose-600 text-white font-bold uppercase tracking-widest text-xs font-sans transition-all cursor-pointer rounded-none border border-[#FF4B55] flex items-center gap-2"
+                >
+                  {isUploadingJson ? 'Salvataggio...' : 'Salva e Memorizza JSON'}
+                </button>
+              </div>
+            </div>
+
+          </div>
         </div>
       )}
 
