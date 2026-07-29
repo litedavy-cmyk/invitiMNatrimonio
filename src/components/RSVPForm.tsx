@@ -328,12 +328,12 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest, existingRSVPs }: RS
 
               {/* Dietary requirements & Intolerances */}
               <div className="flex flex-col">
-                <label className="text-[11px] font-sans font-bold tracking-[0.2em] text-[#CEB381] uppercase mb-1.5">
-                  Allergie o Intolleranze alimentari rilevanti
+                <label className="text-[11px] font-sans font-bold tracking-[0.2em] text-[#CEB381] uppercase mb-1.5 flex items-center gap-1.5">
+                  <span>Allergie, intolleranze o esigenze alimentari (Ospite Principale)</span>
                 </label>
                 <input
                   type="text"
-                  placeholder="Es. No frumento, allergico alle noci..."
+                  placeholder="Es. Celiaco, intollerante al lattosio, no crostacei, vegetariano..."
                   value={dietaryRequirements}
                   onChange={(e) => setDietaryRequirements(e.target.value)}
                   className="px-3 py-2 bg-[#13442D] border border-[#CEB381] text-sm focus:outline-hidden focus:border-white/30 rounded-none text-[#FFFFFF] placeholder:opacity-50"
@@ -391,17 +391,17 @@ export default function RSVPForm({ onRSVPSubmit, savedGuest, existingRSVPs }: RS
                           />
                         </div>
 
-                        {/* Intolerances */}
+                        {/* Intolerances / Allergies */}
                         <div className="flex flex-col">
                           <label className="text-[11px] font-bold uppercase text-[#CEB381] tracking-wider mb-1">
-                            Esigenze alimentari
+                            Allergie, intolleranze o esigenze alimentari (Accompagnatore)
                           </label>
                           <input
                             type="text"
-                            placeholder="Es. Nessuna, celiaco..."
+                            placeholder="Es. Celiaco, intollerante al lattosio, vegetariano..."
                             value={comp.dietaryRequirements}
                             onChange={(e) => handleCompanionChange(comp.id, 'dietaryRequirements', e.target.value)}
-                            className="px-2.5 py-1.5 bg-[#0D2C1E] border border-[#CEB381] text-sm focus:outline-hidden text-[#FFFFFF]"
+                            className="px-2.5 py-1.5 bg-[#0D2C1E] border border-[#CEB381] text-sm focus:outline-hidden text-[#FFFFFF] placeholder:opacity-50"
                           />
                         </div>
                       </div>

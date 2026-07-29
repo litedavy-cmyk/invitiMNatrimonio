@@ -661,7 +661,7 @@ export default function AdminPanel({
                       <th className="px-4 py-3">Invitato Principale</th>
                       <th className="px-4 py-3">Presenza</th>
                       <th className="px-4 py-3">Accompagnatori</th>
-                      <th className="px-4 py-3">Intolleranze</th>
+                      <th className="px-4 py-3">Allergie & Intolleranze</th>
                       <th className="px-4 py-3">Messaggio per Nozze</th>
                       <th className="px-4 py-3 text-right">Rimuovi</th>
                     </tr>
@@ -688,8 +688,8 @@ export default function AdminPanel({
                                 <div key={comp.id} className="text-xs leading-relaxed border-l-2 border-[#FF4B55] pl-2 bg-black/10 p-1.5">
                                   <span className="font-bold text-white block">{comp.name}</span>
                                   {comp.dietaryRequirements && (
-                                    <span className="text-amber-300 font-mono text-[9px] tracking-wider block font-bold uppercase mt-0.5">
-                                      ⚠️ Diet: {comp.dietaryRequirements}
+                                    <span className="text-amber-300 font-mono text-[9.5px] tracking-wider block font-bold uppercase mt-0.5">
+                                      ⚠️ Allergie/Intolleranze: {comp.dietaryRequirements}
                                     </span>
                                   )}
                                 </div>
